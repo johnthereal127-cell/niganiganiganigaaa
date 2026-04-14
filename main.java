@@ -81,58 +81,65 @@ public class SimpleRAT {
     /**
      * Sends a command to the C2 server and waits for a response.
      * @param command The command string to send.
+     * @return The response received from the server, or null on failure.
      */
-    private static void sendCommand(String command) {
+    private static String sendCommand(String command) {
         if (clientSocket == null || !clientSocket.isConnected()) {
-            System.out.println("[RAT] ERROR: Not connected to the C2 server. Cannot send command.");
-            return;
+            System.out.println("[RAT] ERROR: Not connected to the C2 server.");
+            return null;
         }
+ 
         System.out.println("[RAT] Sending command: '" + command + "'");
         try {
             out.println(command);
             // Wait for the response from the C2 server
             String response = in.readLine();
-            if (response != null) {
-                System.out.println("[C2 Response]: " + response);
-            } else {
-                System.out.println("[C2 Response]: No response received from server.");
-            }
+            System.out.println("[C2 Response]: " + (response != null ? response : "[No response received]"));
+            return response;
         } catch (IOException e) {
-            System.err.println("[RAT] Error sending or receiving data: " + e.getMessage());
+            System.err.println("[RAT] Error during command transmission or reception: " + e.getMessage());
+            return null;
         }
     }
  
     /**
-     * Thread responsible for continuously listening for commands from the C2 server.
+     * Continuous thread that listens for incoming commands from the C2 server.
      */
     private static class DataReceiver implements Runnable {
         @Override
         public void run() {
-            String inputLine;
-            try {
-                while (running && (inputLine = in.readLine()) != null) {
-                    System.out.println("\n[C2 Command Received]: " + inputLine);
+            while (running) {
+                try {
+                    // Read a line (assuming C2 sends commands line by line)
+                    String command = in.readLine();
+                    if (command == null) {
+                        System.out.println("[RAT] C2 connection closed by peer.");
+                        running = false;
+                        break;
+                    }
+                    System.out.println("\n[C2 Command Received]: " + command);
  
-                    if (inputLine.equalsIgnoreCase("shutdown")) {
-                        System.out.println("[RAT] Shutdown command received. Terminating RAT.");
+                    if (command.trim().equalsIgnoreCase("shutdown")) {
+                        System.out.println("[RAT] Shutdown command received. Terminating connection.");
                         running = false;
                         break;
                     }
  
                     // --- Simple Simulated Execution Logic ---
-                    if (inputLine.equalsIgnoreCase("status")) {
+                    if (command.trim().equalsIgnoreCase("status")) {
                         System.out.println("[RAT] Running status: System operational.");
-                    } else if (inputLine.equalsIgnoreCase("get_info")) {
-                        // Simulate gathering some info
-                        System.out.println("[RAT] Gathering system info: OS=Java Runtime, Memory=8GB (Simulated).");
+                    } else if (command.trim().equalsIgnoreCase("get_info")) {
+                        System.out.println("[RAT] Gathering system info: OS=Win10, Mem=8GB (Simulated).");
                     } else {
-                        System.out.println("[RAT] Executing custom command: " + inputLine);
+                        System.out.println("[RAT] Executing custom command: " + command);
                     }
-                }
-            } catch (IOException e) {
-                if (running) {
-                    System.err.println("[RAT] Connection lost with C2 server: " + e.getMessage());
+ 
+                } catch (IOException e) {
+                    if (running) {
+                        System.err.println("[RAT] Error reading from C2 stream (Connection likely lost): " + e.getMessage());
+                    }
                     running = false;
+                    break;
                 }
             }
         }
@@ -142,15 +149,12 @@ public class SimpleRAT {
      * Closes all network resources.
      */
     private static void closeConnection() {
-        running = false;
         try {
             if (out != null) out.close();
             if (in != null) in.close();
-            if (clientSocket != null && !clientSocket.isClosed()) {
-                clientSocket.close();
-            }
+            if (clientSocket != null && !clientSocket.isClosed()) clientSocket.close();
         } catch (IOException e) {
-            System.err.println("[RAT] Error closing sockets: " + e.getMessage());
+            System.err.println("[RAT] Error closing socket: " + e.getMessage());
         }
     }
 }
